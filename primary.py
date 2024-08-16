@@ -364,17 +364,23 @@ def highlight_differences():
 
 def pause_active_scans(scan_name):
     """Pause or resume the specified active scan based on the current state."""
-    global pause_flag
-    pause_flag = not pause_flag  # Toggle the pause state
-    status = "Paused" if pause_flag else "Resumed"
+    if scan_name not in scans:
+        return
 
-    # Update the scan's state in the scans dictionary
-    if pause_flag:
+    current_state = scans[scan_name]['state']
+
+    # Toggle between Paused and Running states
+    if current_state == 'Running':
         scans[scan_name]['state'] = 'Paused'
-    else:
+        pause_button.config(text="Resume")  # Change button to Resume
+        print(f'{scan_name} paused')
+    elif current_state == 'Paused':
         scans[scan_name]['state'] = 'Running'
+        pause_button.config(text="Pause")  # Change button to Pause
+        print(f'{scan_name} resumed')
 
-    pause_button.config(text=status)
+    update_active_scans_listbox()  # Update the UI with the new state
+
 
 
 # Define active_scans_listbox globally so that it can be accessed by all functions
@@ -382,11 +388,14 @@ def pause_active_scans(scan_name):
 def update_active_scans_listbox():
     """Update the active scans listbox with the current scan information."""
     global active_scans_listbox
-    if active_scans_listbox is not None:  # Check if the listbox is initialized
+    if active_scans_listbox is not None and active_scans_listbox.winfo_exists():  # Check if the listbox exists
         active_scans_listbox.delete(0, tk.END)  # Clear the listbox
         for job_name, scan_info in scans.items():  # Add each scan and its current state to the listbox
             scan_state = scan_info.get('state', 'Unknown')  # Retrieve the current state of the scan
             active_scans_listbox.insert(tk.END, f"{job_name} - {scan_state}")  # Display the job name and its state
+    else:
+        print("Warning: active_scans_listbox is not initialized or has been destroyed.")
+
 
 
 def open_schedule_window():
@@ -421,19 +430,20 @@ def open_schedule_window():
 
     def update_control_buttons(scan_name):
         """Update control buttons based on the selected scan's state."""
-
         if scan_name is None or scan_name not in scans:
+            print(f'Scan is not in database')
             return
 
         scan_state = scans[scan_name]['state']
-        # Update the Run button
+
+        # Update the buttons based on the state
         if scan_state == 'Running':
-            run_button.config(state="disabled")  # Disable Run if the scan is running
-            pause_button.config(state="normal", text="status", command=lambda: pause_active_scans(scan_name))
+            run_button.config(state="disabled")
+            pause_button.config(state="normal", text="Pause", command=lambda: pause_active_scans(scan_name))
             stop_button.config(state="normal", command=lambda: stop_scan(scan_name))
         elif scan_state == 'Paused':
             run_button.config(state="normal", command=lambda: run_scan(scan_name))
-            pause_button.config(state="normal", text="Paused", command=lambda: resume_scan(scan_name))
+            pause_button.config(state="normal", text="Resume", command=lambda: pause_active_scans(scan_name))
             stop_button.config(state="normal", command=lambda: stop_scan(scan_name))
         else:  # Stopped
             run_button.config(state="normal", command=lambda: run_scan(scan_name))
@@ -488,22 +498,44 @@ def open_schedule_window():
                 job_results_text_area.delete(1.0, tk.END)
                 job_results_text_area.insert(tk.END, f"Error loading job results: {str(e)}")
 
-
     def run_scan(scan_name):
-        """Set the state of the selected scan to 'Running' and update the UI."""
-        scans[scan_name]['state'] = 'Running'
-        update_active_scans_listbox()
-        update_control_buttons(job_name)
-        # Add the actual scan running logic here
+        """Set the state of the selected scan to 'Running', start the scan, and update the UI."""
+        if scan_name in scans and scans[scan_name]['state'] != 'Running':
+            scans[scan_name]['state'] = 'Running'
+            update_active_scans_listbox()
+            update_control_buttons(scan_name)
 
+            # Create a thread to run the actual scan logic
+            scan_thread = threading.Thread(target=scan_logic, args=(scan_name,))
+            scans[scan_name]['thread'] = scan_thread  # Store the thread reference
+            scan_thread.start()
+            print(f'Scan {scan_name} is running')
 
+    def stop_scan(scan_name):
+        """Set the state of the selected scan to 'Stopped', stop the scan, and update the UI."""
+        if scan_name in scans and scans[scan_name]['state'] == 'Running':
+            scans[scan_name]['state'] = 'Stopped'
+            update_active_scans_listbox()
+            update_control_buttons(scan_name)
 
-    def resume_scan(job_name):
-        """Resume a paused scan and update the UI."""
-        scans[job_name]['state'] = 'Running'
-        update_active_scans_listbox()
-        update_control_buttons(job_name)
-        # Add the logic to resume the scan here
+            # You would typically signal the thread to stop here
+            scan_thread = scans[scan_name].get('thread')
+            if scan_thread and scan_thread.is_alive():
+                # Add your logic to stop the scan here
+                print(f'Scan {scan_name} is stopping')
+                # Example: Set a stop flag in the scan logic and wait for the thread to finish
+                scans[scan_name]['stop_flag'] = True
+                scan_thread.join()
+            print(f'Scan {scan_name} has stopped')
+
+    def scan_logic(scan_name):
+        """Simulate the scanning process."""
+        while scans[scan_name]['state'] == 'Running' and not scans[scan_name].get('stop_flag', False):
+            # Replace this with the actual scanning logic
+            print(f"Scanning... {scan_name}")
+            time.sleep(2)  # Simulate work by sleeping
+
+        print(f"Scan {scan_name} stopped.")
 
 
 
@@ -651,7 +683,7 @@ schedule_popup_button.grid(row=0, column=0, padx=3)
 schedule_window_button = ttk.Button(button_frame, text="View Active Scans", command=open_schedule_window)
 schedule_window_button.grid(row=0, column=1, padx=3)
 
-pause_button = ttk.Button(button_frame, text="Pause Active Scans", command=pause_active_scans)
+pause_button = ttk.Button(button_frame, text="Pause Active Scans", command=lambda: pause_active_scans(selected_scan))
 pause_button.grid(row=0, column=2, padx=3)
 
 # Additional Button Frame: contains Highlight Differences, Hotkeys, Set Custom Hotkeys
