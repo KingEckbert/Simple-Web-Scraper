@@ -4,7 +4,7 @@ With this application you can scrape websites (that allow it)
 
 ||||||| FEATURES ||||||
 
->Utilize the schedule feature and auto-save to capture changes in the website over time
+>Utilize the schedule feature and auto-save(WIP) to capture changes in the website over time 
 
 >Run multiple scans at once with the ability to start, pause, and stop each scan
 
