@@ -89,7 +89,7 @@ def scrape():
         if elements:  # If elements are found with the specified tag
             for element in elements:
                 full_content += str(element) + "\n\n"  # Store full element with tags
-            # Display only the first 1000 characters in the preview text area
+            # Display only the first 10000 characters in the preview text area
             preview_text_area.insert(tk.END, full_content[:10000] + "\n\n... [Content Truncated]")
         else:  # If no elements are found
             preview_text_area.insert(tk.END, f"No elements found with the tag '{tag}'.")
